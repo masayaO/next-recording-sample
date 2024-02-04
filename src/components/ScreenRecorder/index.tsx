@@ -9,15 +9,36 @@ const ScreenRecording: React.FC = () => {
 
   const startRecording = async () => {
     try {
-      // 画面収録を開始する
-      const stream: MediaStream = await navigator.mediaDevices.getDisplayMedia({
+      // 画面のキャプチャ
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: "motion" } as MediaTrackConstraints,
-        audio: true,
+        audio: true, // これは画面の音をキャプチャします (例: タブ内の音声)
       });
-      setMediaStream(stream);
+
+      // マイクからの音声のキャプチャ
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+
+      const audioContext = new AudioContext();
+      const displaySource = audioContext.createMediaStreamSource(displayStream);
+      const audioSource = audioContext.createMediaStreamSource(audioStream);
+      const destination = audioContext.createMediaStreamDestination();
+      displaySource.connect(destination);
+      audioSource.connect(destination);
+
+      // 画面のストリームとマイクのストリームを結合
+      const tracks = [
+        ...displayStream.getVideoTracks(),
+        ...destination.stream.getAudioTracks(),
+      ];
+      const combinedStream = new MediaStream(tracks);
+
+      setMediaStream(combinedStream);
 
       // MediaRecorderを使用して収録する
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(combinedStream);
       let chunks: Blob[] = [];
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = () => {
@@ -27,7 +48,7 @@ const ScreenRecording: React.FC = () => {
       recorder.start();
       setMediaRecorder(recorder);
     } catch (error) {
-      console.error("Error capturing screen: ", error);
+      console.error("Error capturing media: ", error);
     }
   };
 
